@@ -12,10 +12,10 @@ class DocumentosSite extends Document {
       <Html>
         <Head>
           <link rel="icon" href="/favicon.png" />
-          <title>Galeria da Beleza</title>
-          <meta name="description" content="Galeria da Beleza" />
+          <title>Sistema RPG</title>
+          <meta name="description" content="Sistema RPG" />
           <meta name="keywords" content=" " />
-          <meta name="author" content="Galeria da Beleza" />
+          <meta name="author" content="Sistema RPG" />
           <link
             rel="stylesheet"
             href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"

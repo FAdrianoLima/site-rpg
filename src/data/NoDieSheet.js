@@ -23,7 +23,7 @@ import {
   REGIOES_PV,
   calcularPericia,
   calcularPVRegioes,
-} from "../../data/noDie";
+} from "./noDie";
 
 const CORES = {
   painel: "#15131D",

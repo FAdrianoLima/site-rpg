@@ -24,7 +24,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
 
-import NoDieSheet from "../personagens/NoDieSheet";
+import NoDieSheet from "../../data/NoDieSheet";
 
 const CORES = {
   painel: "#15131D",
