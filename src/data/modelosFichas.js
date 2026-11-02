@@ -219,3 +219,15 @@ export function identificarModelo(sistema = {}) {
 
   return null;
 }
+
+export function criarDadosIniciais(modelo) {
+  const dados = {};
+
+  for (const secao of modelo?.secoes || []) {
+    for (const campo of secao.campos || []) {
+      dados[campo.id] = campo.tipo === "number" ? 0 : "";
+    }
+  }
+
+  return dados;
+}
