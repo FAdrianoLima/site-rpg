@@ -1,7 +1,16 @@
 import * as React from "react";
 import { useRouter } from "next/router";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 
 import { auth, db } from "../../../firebase-config";
 import Admin from "../../components/admin";
@@ -162,7 +171,7 @@ export default function FichaPersonagem() {
 
         let sistemaCadastrado = {};
 
-        // O No Die é definido no código, não depende do Firestore.
+        // O No Die é definido no código.
         if (dadosFicha.sistemaId !== "noDie" && dadosFicha.sistemaId) {
           const sistemaSnapshot = await getDoc(
             doc(db, "sistemasRPG", dadosFicha.sistemaId),
@@ -170,15 +179,37 @@ export default function FichaPersonagem() {
 
           if (sistemaSnapshot.exists()) {
             sistemaCadastrado = sistemaSnapshot.data();
+          } else {
+            // Caso o ID da ficha seja diferente do código do sistema.
+            const consultaSistema = await getDocs(
+              query(
+                collection(db, "sistemasRPG"),
+                where("codigo", "==", dadosFicha.sistemaId),
+              ),
+            );
+
+            if (!consultaSistema.empty) {
+              sistemaCadastrado = consultaSistema.docs[0].data();
+            }
           }
         }
 
         const modeloEncontrado = identificarModelo({
           id: dadosFicha.sistemaId,
+          sistemaId: dadosFicha.sistemaId,
+          codigo: sistemaCadastrado.codigo,
           nome: sistemaCadastrado.nome || dadosFicha.sistemaNome,
           titulo: sistemaCadastrado.titulo,
           versao: sistemaCadastrado.versao,
         });
+
+        if (!modeloEncontrado) {
+          throw new Error(
+            `Não foi possível identificar o modelo do sistema "${
+              dadosFicha.sistemaNome || dadosFicha.sistemaId
+            }".`,
+          );
+        }
 
         if (!modeloEncontrado) {
           throw new Error(
