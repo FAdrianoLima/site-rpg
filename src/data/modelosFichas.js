@@ -366,6 +366,13 @@ export const MODELOS_FICHAS = {
     ],
   },
 
+  cyberpunk: {
+    id: "cyberpunk",
+    nome: "Cyberpunk",
+    titulo: "Cyberpunk RPG",
+    secoes: [],
+  },
+
   dnd5e2024: {
     id: "dnd5e2024",
     nome: "D&D 5e revisada",
@@ -592,6 +599,10 @@ export function identificarModelo(sistema = {}) {
     texto.includes("revised")
   ) {
     return MODELOS_FICHAS.dnd5e2024;
+  }
+
+  if (texto.includes("cyberpunk") || texto.includes("cyber punk")) {
+    return MODELOS_FICHAS.cyberpunk;
   }
 
   if (

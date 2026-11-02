@@ -7,10 +7,17 @@ import {
   query,
   where,
   serverTimestamp,
+  updateDoc,
+  deleteDoc,
+  doc,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../../../firebase-config";
 import Admin from "../../components/admin";
+
+import EditIcon from "@mui/icons-material/Edit";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import {
   Alert,
@@ -87,6 +94,16 @@ export default function Personagens() {
   const [mesaId, setMesaId] = React.useState("");
   const [sistemaId, setSistemaId] = React.useState("");
   const [descricao, setDescricao] = React.useState("");
+
+  const [fichaSelecionada, setFichaSelecionada] = React.useState(null);
+
+  const [dialogMesaAberto, setDialogMesaAberto] = React.useState(false);
+  const [novaMesaId, setNovaMesaId] = React.useState("");
+
+  const [dialogExcluirAberto, setDialogExcluirAberto] = React.useState(false);
+
+  const [dialogDuplicarAberto, setDialogDuplicarAberto] = React.useState(false);
+  const [nomeDuplicado, setNomeDuplicado] = React.useState("");
 
   const carregarDados = React.useCallback(async (idUsuario, dadosUsuario) => {
     setCarregando(true);
@@ -299,6 +316,144 @@ export default function Personagens() {
     }
   };
 
+  // Abre o diálogo para alterar a mesa.
+  const abrirAlterarMesa = (event, ficha) => {
+    event.stopPropagation();
+
+    setFichaSelecionada(ficha);
+    setNovaMesaId(ficha.mesaId || "");
+    setErro("");
+    setDialogMesaAberto(true);
+  };
+
+  // Salva a nova mesa.
+  const alterarMesaFicha = async (event) => {
+    event.preventDefault();
+    setErro("");
+
+    if (!fichaSelecionada || !novaMesaId) {
+      setErro("Selecione uma mesa.");
+      return;
+    }
+
+    const mesaSelecionada = mesas.find((mesa) => mesa.id === novaMesaId);
+
+    if (!mesaSelecionada) {
+      setErro("A mesa selecionada não foi encontrada.");
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      await updateDoc(doc(db, "personagens", fichaSelecionada.id), {
+        mesaId: mesaSelecionada.id,
+        mesaNome: nomeMesa(mesaSelecionada),
+        atualizadoEm: serverTimestamp(),
+      });
+
+      setFichas((anteriores) =>
+        anteriores.map((ficha) =>
+          ficha.id === fichaSelecionada.id
+            ? {
+                ...ficha,
+                mesaId: mesaSelecionada.id,
+                mesaNome: nomeMesa(mesaSelecionada),
+              }
+            : ficha,
+        ),
+      );
+
+      setDialogMesaAberto(false);
+      setFichaSelecionada(null);
+    } catch (error) {
+      console.error("Erro ao alterar mesa:", error);
+      setErro("Não foi possível alterar a mesa da ficha.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // Abre o diálogo para duplicar.
+  const abrirDuplicarFicha = (event, ficha) => {
+    event.stopPropagation();
+
+    setFichaSelecionada(ficha);
+    setNomeDuplicado(`${ficha.nome || "Personagem"} (cópia)`);
+    setErro("");
+    setDialogDuplicarAberto(true);
+  };
+
+  // Cria uma cópia completa da ficha.
+  const duplicarFicha = async (event) => {
+    event.preventDefault();
+    setErro("");
+
+    if (!fichaSelecionada || !nomeDuplicado.trim()) {
+      setErro("Informe o nome da cópia.");
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      const { id, criadoEm, atualizadoEm, ...dadosOriginais } =
+        fichaSelecionada;
+
+      const novaFicha = {
+        ...dadosOriginais,
+        nome: nomeDuplicado.trim(),
+        criadoEm: serverTimestamp(),
+        atualizadoEm: serverTimestamp(),
+      };
+
+      const documento = await addDoc(collection(db, "personagens"), novaFicha);
+
+      setDialogDuplicarAberto(false);
+      setFichaSelecionada(null);
+
+      await router.push(`/personagens/${documento.id}`);
+    } catch (error) {
+      console.error("Erro ao duplicar ficha:", error);
+      setErro("Não foi possível duplicar a ficha.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // Abre a confirmação de exclusão.
+  const abrirExcluirFicha = (event, ficha) => {
+    event.stopPropagation();
+
+    setFichaSelecionada(ficha);
+    setErro("");
+    setDialogExcluirAberto(true);
+  };
+
+  // Exclui definitivamente a ficha.
+  const excluirFicha = async () => {
+    if (!fichaSelecionada) return;
+
+    setSalvando(true);
+    setErro("");
+
+    try {
+      await deleteDoc(doc(db, "personagens", fichaSelecionada.id));
+
+      setFichas((anteriores) =>
+        anteriores.filter((ficha) => ficha.id !== fichaSelecionada.id),
+      );
+
+      setDialogExcluirAberto(false);
+      setFichaSelecionada(null);
+    } catch (error) {
+      console.error("Erro ao excluir ficha:", error);
+      setErro("Não foi possível excluir a ficha.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   return (
     <Admin>
       <Box sx={{ color: CORES.texto, pb: 5 }}>
@@ -457,7 +612,44 @@ export default function Personagens() {
                     </Typography>
                   </Box>
 
-                  <ArrowForwardIcon sx={{ color: CORES.destaque, mt: 0.5 }} />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Button
+                      size="small"
+                      title="Alterar mesa"
+                      onClick={(event) => abrirAlterarMesa(event, ficha)}
+                      startIcon={<EditIcon />}
+                      sx={{ color: CORES.secundario, minWidth: 0 }}
+                    >
+                      Mesa
+                    </Button>
+
+                    <Button
+                      size="small"
+                      title="Duplicar ficha"
+                      onClick={(event) => abrirDuplicarFicha(event, ficha)}
+                      sx={{ color: CORES.destaque, minWidth: 0 }}
+                    >
+                      <ContentCopyIcon fontSize="small" />
+                    </Button>
+
+                    <Button
+                      size="small"
+                      title="Excluir ficha"
+                      onClick={(event) => abrirExcluirFicha(event, ficha)}
+                      sx={{ color: "#F87171", minWidth: 0 }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </Button>
+
+                    <ArrowForwardIcon sx={{ color: CORES.destaque, ml: 0.5 }} />
+                  </Box>
                 </Box>
 
                 <Box
@@ -605,6 +797,152 @@ export default function Personagens() {
               </Button>
             </DialogActions>
           </Box>
+        </Dialog>
+        <Dialog
+          open={dialogMesaAberto}
+          onClose={() => !salvando && setDialogMesaAberto(false)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <Box component="form" onSubmit={alterarMesaFicha}>
+            <DialogTitle>Alterar mesa</DialogTitle>
+
+            <DialogContent>
+              <Typography
+                variant="body2"
+                sx={{ mb: 2, color: "text.secondary" }}
+              >
+                Escolha a nova mesa para o personagem{" "}
+                <strong>{fichaSelecionada?.nome}</strong>.
+              </Typography>
+
+              <FormControl fullWidth required>
+                <InputLabel id="nova-mesa-label">Mesa</InputLabel>
+
+                <Select
+                  labelId="nova-mesa-label"
+                  value={novaMesaId}
+                  label="Mesa"
+                  onChange={(event) => setNovaMesaId(event.target.value)}
+                >
+                  {mesas.map((mesa) => (
+                    <MenuItem key={mesa.id} value={mesa.id}>
+                      {nomeMesa(mesa)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                onClick={() => setDialogMesaAberto(false)}
+                disabled={salvando}
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={salvando || !novaMesaId}
+                sx={{ bgcolor: CORES.destaque, color: "#171323" }}
+              >
+                {salvando ? "Salvando..." : "Alterar mesa"}
+              </Button>
+            </DialogActions>
+          </Box>
+        </Dialog>
+        <Dialog
+          open={dialogDuplicarAberto}
+          onClose={() => !salvando && setDialogDuplicarAberto(false)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <Box component="form" onSubmit={duplicarFicha}>
+            <DialogTitle>Duplicar personagem</DialogTitle>
+
+            <DialogContent>
+              <Typography
+                variant="body2"
+                sx={{ mb: 2, color: "text.secondary" }}
+              >
+                Será criada uma cópia completa dos dados da ficha original. Você
+                poderá editar a nova ficha independentemente.
+              </Typography>
+
+              <TextField
+                fullWidth
+                autoFocus
+                required
+                label="Nome da nova ficha"
+                value={nomeDuplicado}
+                onChange={(event) => setNomeDuplicado(event.target.value)}
+                inputProps={{ maxLength: 100 }}
+              />
+
+              <Alert severity="info" sx={{ mt: 2 }}>
+                A cópia manterá o mesmo sistema, jogador e mesa da ficha
+                original.
+              </Alert>
+            </DialogContent>
+
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                onClick={() => setDialogDuplicarAberto(false)}
+                disabled={salvando}
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={salvando || !nomeDuplicado.trim()}
+                sx={{ bgcolor: CORES.destaque, color: "#171323" }}
+              >
+                {salvando ? "Duplicando..." : "Duplicar ficha"}
+              </Button>
+            </DialogActions>
+          </Box>
+        </Dialog>
+        <Dialog
+          open={dialogExcluirAberto}
+          onClose={() => !salvando && setDialogExcluirAberto(false)}
+          fullWidth
+          maxWidth="xs"
+        >
+          <DialogTitle>Excluir personagem?</DialogTitle>
+
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary">
+              Tem certeza de que deseja excluir a ficha{" "}
+              <strong>{fichaSelecionada?.nome}</strong>?
+            </Typography>
+
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Essa ação é permanente. Todos os dados salvos nessa ficha serão
+              excluídos e não poderão ser recuperados por esta aplicação.
+            </Alert>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => setDialogExcluirAberto(false)}
+              disabled={salvando}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              variant="contained"
+              color="error"
+              onClick={excluirFicha}
+              disabled={salvando}
+            >
+              {salvando ? "Excluindo..." : "Excluir definitivamente"}
+            </Button>
+          </DialogActions>
         </Dialog>
       </Box>
     </Admin>

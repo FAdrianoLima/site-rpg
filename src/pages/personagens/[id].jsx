@@ -26,6 +26,9 @@ import SaveIcon from "@mui/icons-material/Save";
 
 import NoDieSheet from "../../data/NoDieSheet";
 
+import CyberpunkSheet from "../../data/CyberpunkSheet";
+import { criarDadosIniciaisCyberpunk } from "../../data/cyberpunk";
+
 const CORES = {
   painel: "#15131D",
   borda: "rgba(196, 181, 253, 0.14)",
@@ -203,7 +206,48 @@ export default function FichaPersonagem() {
         setUsuario(dadosUsuario);
         setFicha(dadosFicha);
         setModelo(modeloEncontrado);
-        setDados(migrarDadosAntigos(dadosFicha, modeloEncontrado));
+
+        const dadosCarregados = migrarDadosAntigos(
+          dadosFicha,
+          modeloEncontrado,
+        );
+
+        if (modeloEncontrado.id === "cyberpunk") {
+          const iniciaisCyberpunk = criarDadosIniciaisCyberpunk();
+
+          setDados({
+            ...iniciaisCyberpunk,
+            ...dadosCarregados,
+
+            identidadeCyberpunk: {
+              ...iniciaisCyberpunk.identidadeCyberpunk,
+              ...(dadosCarregados.identidadeCyberpunk || {}),
+            },
+
+            atributosCyberpunk: {
+              ...iniciaisCyberpunk.atributosCyberpunk,
+              ...(dadosCarregados.atributosCyberpunk || {}),
+            },
+
+            pvRegioesCyberpunkAtuais: {
+              ...iniciaisCyberpunk.pvRegioesCyberpunkAtuais,
+              ...(dadosCarregados.pvRegioesCyberpunkAtuais || {}),
+            },
+
+            stressCyberpunk: {
+              ...iniciaisCyberpunk.stressCyberpunk,
+              ...(dadosCarregados.stressCyberpunk || {}),
+            },
+
+            sanidadeCyberpunk: {
+              ...iniciaisCyberpunk.sanidadeCyberpunk,
+              ...(dadosCarregados.sanidadeCyberpunk || {}),
+            },
+          });
+        } else {
+          setDados(dadosCarregados);
+        }
+
         setPodeEditar(admin || dono || mestreDaMesa);
       } catch (error) {
         console.error("Erro ao carregar ficha:", error);
@@ -257,6 +301,9 @@ export default function FichaPersonagem() {
     try {
       const ehNoDie = ficha.sistemaId === "noDie" || modelo.id === "noDie";
 
+      const ehCyberpunk =
+        ficha.sistemaId === "cyberpunk" || modelo.id === "cyberpunk";
+
       if (ehNoDie) {
         // Salva todos os dados personalizados da ficha No Die.
         dadosConvertidos = {
@@ -265,6 +312,43 @@ export default function FichaPersonagem() {
           bonusPericias: [...(dados.bonusPericias || [])],
           formulasPericias: { ...(dados.formulasPericias || {}) },
           pvRegioesAtuais: { ...(dados.pvRegioesAtuais || {}) },
+        };
+      } else if (ehCyberpunk) {
+        // Salva todos os dados personalizados da ficha Cyberpunk.
+        dadosConvertidos = {
+          ...dados,
+
+          identidadeCyberpunk: {
+            ...(dados.identidadeCyberpunk || {}),
+          },
+
+          atributosCyberpunk: {
+            ...(dados.atributosCyberpunk || {}),
+          },
+
+          ajustesPericiasCyberpunk: {
+            ...(dados.ajustesPericiasCyberpunk || {}),
+          },
+
+          formulasCyberpunk: {
+            ...(dados.formulasCyberpunk || {}),
+          },
+
+          habilidadesCyberpunk: [...(dados.habilidadesCyberpunk || [])],
+
+          cyberwareCyberpunk: [...(dados.cyberwareCyberpunk || [])],
+
+          pvRegioesCyberpunkAtuais: {
+            ...(dados.pvRegioesCyberpunkAtuais || {}),
+          },
+
+          stressCyberpunk: {
+            ...(dados.stressCyberpunk || {}),
+          },
+
+          sanidadeCyberpunk: {
+            ...(dados.sanidadeCyberpunk || {}),
+          },
         };
       } else {
         // Mantém o salvamento original dos modelos D&D.
@@ -423,6 +507,13 @@ export default function FichaPersonagem() {
             <NoDieSheet
               dados={dados}
               setDados={setDados}
+              podeEditar={podeEditar}
+              salvando={salvando}
+            />
+          ) : ficha.sistemaId === "cyberpunk" || modelo.id === "cyberpunk" ? (
+            <CyberpunkSheet
+              dados={dados}
+              onChange={setDados}
               podeEditar={podeEditar}
               salvando={salvando}
             />
