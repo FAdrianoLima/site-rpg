@@ -1,6 +1,5 @@
-// src/data/CyberpunkSheet.js
-
 import React from "react";
+
 import {
   Box,
   Button,
@@ -21,7 +20,46 @@ import {
   calcularPericiaCyberpunk,
   calcularPECyberpunk,
   calcularBonusCyberpunk,
+  calcularPVMaximoCyberpunk,
+  calcularPVRegiaoCyberpunk,
 } from "./cyberpunk";
+
+const CORES = {
+  painel: "#15131D",
+  borda: "rgba(196, 181, 253, 0.14)",
+  texto: "#F5F3FF",
+  secundario: "#A5A0B2",
+  destaque: "#A78BFA",
+};
+
+function formatarFormula(formula) {
+  const nomes = {
+    STR: "Força",
+    DEX: "Destreza",
+    REF: "Reflexos",
+    CON: "Constituição",
+    INT: "Inteligência",
+    WIS: "Sabedoria",
+    CHA: "Carisma",
+    PER: "Percepção",
+    RES: "Resistência",
+    WIL: "Vontade",
+  };
+
+  const atributos = formula
+    .filter((id) => id !== "SUM")
+    .map((id) => nomes[id] || id);
+
+  if (atributos.length === 1) {
+    return atributos[0];
+  }
+
+  const soma = formula.includes("SUM");
+
+  return soma
+    ? `${atributos.join(" + ")} (soma)`
+    : `(${atributos.join(" + ")}) / 2`;
+}
 
 export default function CyberpunkSheet({
   dados = {},
@@ -29,10 +67,6 @@ export default function CyberpunkSheet({
   podeEditar = true,
   salvando = false,
 }) {
-  const atualizar = (campo, valor) => {
-    onChange({ ...dados, [campo]: valor });
-  };
-
   const identidade = dados.identidadeCyberpunk || {};
   const atributos = dados.atributosCyberpunk || {};
   const habilidades = dados.habilidadesCyberpunk || [];
@@ -41,31 +75,56 @@ export default function CyberpunkSheet({
   const formulas = dados.formulasCyberpunk || {};
   const pvRegioes = dados.pvRegioesCyberpunkAtuais || {};
 
+  // Utiliza atualização funcional para evitar sobrescrever alterações.
+  const atualizar = (campo, valor) => {
+    onChange((anterior) => {
+      const atual = anterior || {};
+
+      const novoValor =
+        typeof valor === "function" ? valor(atual[campo]) : valor;
+
+      return {
+        ...atual,
+        [campo]: novoValor,
+      };
+    });
+  };
+
+  const atualizarInterno = (campo, propriedade, valor) => {
+    atualizar(campo, (anterior) => ({
+      ...(anterior || {}),
+      [propriedade]: valor,
+    }));
+  };
+
   const atualizarIdentidade = (campo, valor) => {
-    atualizar("identidadeCyberpunk", { ...identidade, [campo]: valor });
+    atualizarInterno("identidadeCyberpunk", campo, valor);
   };
 
   const atualizarAtributo = (id, campo, valor) => {
-    atualizar("atributosCyberpunk", {
-      ...atributos,
-      [id]: {
-        valor: 0,
-        modificador: 0,
-        multiplicador: 1,
-        ...atributos[id],
-        [campo]: Number(valor),
-      },
+    atualizar("atributosCyberpunk", (anterior) => {
+      const atual = anterior || {};
+
+      return {
+        ...atual,
+        [id]: {
+          valor: 0,
+          modificador: 0,
+          multiplicador: 1,
+          ...(atual[id] || {}),
+          [campo]: Number(valor),
+        },
+      };
     });
   };
 
   const atualizarRecurso = (campo, propriedade, valor) => {
-    const atual = dados[campo] || {};
-    atualizar(campo, { ...atual, [propriedade]: Number(valor) });
+    atualizarInterno(campo, propriedade, Number(valor));
   };
 
   const adicionarHabilidade = () => {
-    atualizar("habilidadesCyberpunk", [
-      ...habilidades,
+    atualizar("habilidadesCyberpunk", (anterior) => [
+      ...(anterior || []),
       {
         id: `${Date.now()}-${Math.random()}`,
         nome: "",
@@ -77,57 +136,111 @@ export default function CyberpunkSheet({
   };
 
   const editarHabilidade = (index, campo, valor) => {
-    const novaLista = [...habilidades];
-    novaLista[index] = { ...novaLista[index], [campo]: valor };
-    atualizar("habilidadesCyberpunk", novaLista);
+    atualizar("habilidadesCyberpunk", (anterior) => {
+      const lista = [...(anterior || [])];
+
+      lista[index] = {
+        ...lista[index],
+        [campo]: valor,
+      };
+
+      return lista;
+    });
+  };
+
+  const removerHabilidade = (index) => {
+    atualizar("habilidadesCyberpunk", (anterior) =>
+      (anterior || []).filter((_, i) => i !== index),
+    );
   };
 
   const adicionarBonus = (index) => {
-    const novaLista = [...habilidades];
-    novaLista[index] = {
-      ...novaLista[index],
-      bonus: [
-        ...(novaLista[index].bonus || []),
-        { tipo: "pericia", alvo: "", valor: 1 },
-      ],
-    };
-    atualizar("habilidadesCyberpunk", novaLista);
+    atualizar("habilidadesCyberpunk", (anterior) => {
+      const lista = [...(anterior || [])];
+
+      lista[index] = {
+        ...lista[index],
+        bonus: [
+          ...(lista[index].bonus || []),
+          {
+            tipo: "pericia",
+            alvo: "",
+            valor: 1,
+          },
+        ],
+      };
+
+      return lista;
+    });
   };
 
   const editarBonus = (habilidadeIndex, bonusIndex, campo, valor) => {
-    const novaLista = [...habilidades];
-    const bonus = [...(novaLista[habilidadeIndex].bonus || [])];
-    bonus[bonusIndex] = { ...bonus[bonusIndex], [campo]: valor };
+    atualizar("habilidadesCyberpunk", (anterior) => {
+      const lista = [...(anterior || [])];
 
-    if (campo === "tipo") bonus[bonusIndex].alvo = "";
+      const bonus = [...(lista[habilidadeIndex].bonus || [])];
 
-    novaLista[habilidadeIndex] = {
-      ...novaLista[habilidadeIndex],
-      bonus,
-    };
+      bonus[bonusIndex] = {
+        ...bonus[bonusIndex],
+        [campo]: valor,
+      };
 
-    atualizar("habilidadesCyberpunk", novaLista);
+      if (campo === "tipo") {
+        bonus[bonusIndex].alvo = "";
+      }
+
+      lista[habilidadeIndex] = {
+        ...lista[habilidadeIndex],
+        bonus,
+      };
+
+      return lista;
+    });
   };
 
   const removerBonus = (habilidadeIndex, bonusIndex) => {
-    const novaLista = [...habilidades];
-    novaLista[habilidadeIndex].bonus = novaLista[habilidadeIndex].bonus.filter(
-      (_, index) => index !== bonusIndex,
-    );
-    atualizar("habilidadesCyberpunk", novaLista);
+    atualizar("habilidadesCyberpunk", (anterior) => {
+      const lista = [...(anterior || [])];
+
+      lista[habilidadeIndex] = {
+        ...lista[habilidadeIndex],
+        bonus: (lista[habilidadeIndex].bonus || []).filter(
+          (_, index) => index !== bonusIndex,
+        ),
+      };
+
+      return lista;
+    });
   };
 
   const adicionarCyberware = () => {
-    atualizar("cyberwareCyberpunk", [
-      ...cyberwares,
-      { id: `${Date.now()}-${Math.random()}`, nome: "", efeitos: "" },
+    atualizar("cyberwareCyberpunk", (anterior) => [
+      ...(anterior || []),
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        nome: "",
+        efeitos: "",
+      },
     ]);
   };
 
   const editarCyberware = (index, campo, valor) => {
-    const novaLista = [...cyberwares];
-    novaLista[index] = { ...novaLista[index], [campo]: valor };
-    atualizar("cyberwareCyberpunk", novaLista);
+    atualizar("cyberwareCyberpunk", (anterior) => {
+      const lista = [...(anterior || [])];
+
+      lista[index] = {
+        ...lista[index],
+        [campo]: valor,
+      };
+
+      return lista;
+    });
+  };
+
+  const removerCyberware = (index) => {
+    atualizar("cyberwareCyberpunk", (anterior) =>
+      (anterior || []).filter((_, i) => i !== index),
+    );
   };
 
   const opcoesBonus = (tipo) => {
@@ -139,7 +252,12 @@ export default function CyberpunkSheet({
     }
 
     if (tipo === "recurso") {
-      return [{ id: "PE", nome: "Pontos de Esforço (PE)" }];
+      return [
+        {
+          id: "PE",
+          nome: "Pontos de Esforço (PE)",
+        },
+      ];
     }
 
     return LISTA_PERICIAS_CYBERPUNK.map((item) => ({
@@ -148,28 +266,70 @@ export default function CyberpunkSheet({
     }));
   };
 
-  const campo = (label, value, onChange, props = {}) => (
-    <TextField
-      fullWidth
-      size="small"
-      label={label}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      {...props}
-      disabled={!podeEditar || salvando || props.disabled}
-    />
-  );
+  const campo = (label, value, onValueChange, props = {}) => {
+    const { disabled: disabledExtra, ...rest } = props;
+
+    return (
+      <TextField
+        fullWidth
+        size="small"
+        label={label}
+        value={value ?? ""}
+        onChange={(event) => onValueChange(event.target.value)}
+        {...rest}
+        disabled={!podeEditar || salvando || disabledExtra}
+        sx={{
+          "& .MuiOutlinedInput-root": {
+            bgcolor: "#100E16",
+            color: CORES.texto,
+            "& fieldset": {
+              borderColor: CORES.borda,
+            },
+            "&:hover fieldset": {
+              borderColor: CORES.destaque,
+            },
+          },
+          "& .MuiInputLabel-root": {
+            color: CORES.secundario,
+          },
+          "& .MuiFormHelperText-root": {
+            color: CORES.secundario,
+          },
+          ...rest.sx,
+        }}
+      />
+    );
+  };
+
   const secao = (titulo, children) => (
-    <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: { xs: 2, sm: 3 },
+        mb: 3,
+        bgcolor: CORES.painel,
+        borderColor: CORES.borda,
+        color: CORES.texto,
+        borderRadius: 3,
+      }}
+    >
       <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
         {titulo}
       </Typography>
+
       {children}
     </Paper>
   );
 
+  const pvMaximo = calcularPVMaximoCyberpunk(dados);
+  const peMaximo = calcularPECyberpunk(dados);
+
+  const pvAtual = Number(dados.pvAtualCyberpunk ?? 0);
+
   return (
     <Box>
+      {/* IDENTIDADE */}
+
       {secao(
         "Identidade",
         <Grid container spacing={2}>
@@ -178,21 +338,25 @@ export default function CyberpunkSheet({
               atualizarIdentidade("nome", v),
             )}
           </Grid>
+
           <Grid item xs={6} md={2}>
             {campo("Idade", identidade.idade, (v) =>
               atualizarIdentidade("idade", v),
             )}
           </Grid>
+
           <Grid item xs={6} md={2}>
             {campo("Altura", identidade.altura, (v) =>
               atualizarIdentidade("altura", v),
             )}
           </Grid>
+
           <Grid item xs={6} md={3}>
             {campo("Peso", identidade.peso, (v) =>
               atualizarIdentidade("peso", v),
             )}
           </Grid>
+
           <Grid item xs={12}>
             {campo("Cultura", identidade.cultura, (v) =>
               atualizarIdentidade("cultura", v),
@@ -200,6 +364,8 @@ export default function CyberpunkSheet({
           </Grid>
         </Grid>,
       )}
+
+      {/* ATRIBUTOS */}
 
       {secao(
         "Atributos",
@@ -218,6 +384,7 @@ export default function CyberpunkSheet({
 
           {ATRIBUTOS_CYBERPUNK.map((atributo) => {
             const item = atributos[atributo.id] || {};
+
             const total = calcularAtributoCyberpunk(dados, atributo.id);
 
             return (
@@ -231,6 +398,7 @@ export default function CyberpunkSheet({
                 <Grid item xs={2.4}>
                   <Typography fontWeight={600}>{atributo.nome}</Typography>
                 </Grid>
+
                 <Grid item xs={2.4}>
                   {campo(
                     "Valor",
@@ -239,6 +407,7 @@ export default function CyberpunkSheet({
                     { type: "number" },
                   )}
                 </Grid>
+
                 <Grid item xs={2.4}>
                   {campo(
                     "Mod.",
@@ -247,18 +416,24 @@ export default function CyberpunkSheet({
                     { type: "number" },
                   )}
                 </Grid>
+
                 <Grid item xs={2.4}>
                   {campo(
                     "Mult.",
                     item.multiplicador ?? 1,
                     (v) => atualizarAtributo(atributo.id, "multiplicador", v),
-                    { type: "number", inputProps: { step: 0.1 } },
+                    {
+                      type: "number",
+                      inputProps: { step: 0.1 },
+                    },
                   )}
                 </Grid>
+
                 <Grid item xs={2.4}>
                   <Typography fontWeight={700}>
                     {Number(total.toFixed(2))}
                   </Typography>
+
                   {calcularBonusCyberpunk(dados, "atributo", atributo.id) !==
                     0 && (
                     <Typography variant="caption" color="success.main">
@@ -272,39 +447,54 @@ export default function CyberpunkSheet({
         </>,
       )}
 
+      {/* RECURSOS */}
+
       {secao(
         "Recursos",
         <Grid container spacing={2}>
           <Grid item xs={12} md={4}>
-            {campo(
-              "PV máximo",
-              dados.pvMaximoCyberpunk ?? 0,
-              (v) => atualizar("pvMaximoCyberpunk", Number(v)),
-              { type: "number" },
-            )}
+            <TextField
+              fullWidth
+              size="small"
+              label="PV máximo (calculado pela CON)"
+              value={Number(pvMaximo.toFixed(2))}
+              InputProps={{ readOnly: true }}
+              helperText="Calculado automaticamente pelo valor total de Constituição."
+            />
           </Grid>
+
           <Grid item xs={12} md={4}>
             {campo(
               "PV atual",
-              dados.pvAtualCyberpunk ?? 0,
-              (v) => atualizar("pvAtualCyberpunk", Number(v)),
-              { type: "number" },
+              pvAtual,
+              (v) => atualizar("pvAtualCyberpunk", Number(v) || 0),
+              {
+                type: "number",
+                inputProps: {
+                  min: 0,
+                  max: pvMaximo,
+                  step: "any",
+                },
+              },
             )}
           </Grid>
+
           <Grid item xs={12} md={4}>
             <TextField
               fullWidth
               size="small"
               label="PE máximo calculado"
-              value={calcularPECyberpunk(dados)}
+              value={peMaximo}
               InputProps={{ readOnly: true }}
+              helperText="(CON + RES) / 2 + bônus de habilidades."
             />
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Typography fontWeight={600} sx={{ mb: 1 }}>
-              Stress
+              Estresse
             </Typography>
+
             <Grid container spacing={1}>
               <Grid item xs={6}>
                 {campo(
@@ -314,6 +504,7 @@ export default function CyberpunkSheet({
                   { type: "number" },
                 )}
               </Grid>
+
               <Grid item xs={6}>
                 {campo(
                   "Máximo",
@@ -329,6 +520,7 @@ export default function CyberpunkSheet({
             <Typography fontWeight={600} sx={{ mb: 1 }}>
               Sanidade
             </Typography>
+
             <Grid container spacing={1}>
               <Grid item xs={6}>
                 {campo(
@@ -338,6 +530,7 @@ export default function CyberpunkSheet({
                   { type: "number" },
                 )}
               </Grid>
+
               <Grid item xs={6}>
                 {campo(
                   "Máximo",
@@ -351,34 +544,55 @@ export default function CyberpunkSheet({
         </Grid>,
       )}
 
+      {/* PV POR REGIÃO */}
+
       {secao(
         "Pontos de vida por região",
-        <Grid container spacing={2}>
-          {REGIOES_PV_CYBERPUNK.map((regiao) => {
-            const maximo =
-              Number(dados.pvMaximoCyberpunk || 0) * regiao.multiplicador;
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Os valores máximos são calculados automaticamente com base no PV
+            total e no multiplicador de cada região.
+          </Typography>
 
-            return (
-              <Grid item xs={6} md={3} key={regiao.id}>
-                <Typography fontWeight={600}>{regiao.nome}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Máximo: {maximo.toFixed(1)} ({regiao.multiplicador}x PV)
-                </Typography>
-                {campo(
-                  "PV atual",
-                  pvRegioes[regiao.id] ?? 0,
-                  (v) =>
-                    atualizar("pvRegioesCyberpunkAtuais", {
-                      ...pvRegioes,
-                      [regiao.id]: Number(v),
-                    }),
-                  { type: "number" },
-                )}
-              </Grid>
-            );
-          })}
-        </Grid>,
+          <Grid container spacing={2}>
+            {REGIOES_PV_CYBERPUNK.map((regiao) => {
+              const maximo = calcularPVRegiaoCyberpunk(dados, regiao.id);
+
+              const atual = Number(pvRegioes[regiao.id] ?? 0);
+
+              return (
+                <Grid item xs={6} md={3} key={regiao.id}>
+                  <Typography fontWeight={600}>{regiao.nome}</Typography>
+
+                  <Typography variant="caption" color="text.secondary">
+                    Máximo: {maximo.toFixed(1)} ({regiao.multiplicador}x PV)
+                  </Typography>
+
+                  {campo(
+                    "PV atual",
+                    atual,
+                    (v) =>
+                      atualizar("pvRegioesCyberpunkAtuais", (anterior) => ({
+                        ...(anterior || {}),
+                        [regiao.id]: Number(v) || 0,
+                      })),
+                    {
+                      type: "number",
+                      inputProps: {
+                        min: 0,
+                        max: maximo,
+                        step: "any",
+                      },
+                    },
+                  )}
+                </Grid>
+              );
+            })}
+          </Grid>
+        </>,
       )}
+
+      {/* PERÍCIAS */}
 
       {secao(
         "Perícias",
@@ -392,61 +606,66 @@ export default function CyberpunkSheet({
               {grupo.pericias.map(([id, nome, alternativas]) => {
                 const valor = calcularPericiaCyberpunk(dados, id);
 
+                const indice = Math.max(
+                  0,
+                  Math.min(Number(formulas[id] ?? 0), alternativas.length - 1),
+                );
+
                 return (
                   <Grid
                     container
                     spacing={1}
                     alignItems="center"
                     key={id}
-                    sx={{ mb: 1 }}
+                    sx={{ mb: 1.5 }}
                   >
                     <Grid item xs={12} md={4}>
-                      <Typography>{nome}</Typography>
+                      <Typography fontWeight={500}>{nome}</Typography>
                     </Grid>
-                    <Grid item xs={6} md={3}>
+
+                    <Grid item xs={12} md={3}>
                       {alternativas.length > 1 ? (
                         <TextField
                           select
                           fullWidth
                           size="small"
                           label="Fórmula"
-                          value={formulas[id] ?? 0}
+                          value={indice}
+                          disabled={!podeEditar || salvando}
                           onChange={(e) =>
-                            atualizar("formulasCyberpunk", {
-                              ...formulas,
+                            atualizar("formulasCyberpunk", (anterior) => ({
+                              ...(anterior || {}),
                               [id]: Number(e.target.value),
-                            })
+                            }))
                           }
                         >
                           {alternativas.map((formula, index) => (
                             <MenuItem key={index} value={index}>
-                              {formula.filter((x) => x !== "SUM").join(" + ")}
-                              {formula.includes("SUM") ? " (soma)" : " (média)"}
+                              {formatarFormula(formula)}
                             </MenuItem>
                           ))}
                         </TextField>
                       ) : (
                         <Typography variant="caption" color="text.secondary">
-                          {alternativas[0]
-                            .filter((x) => x !== "SUM")
-                            .join(" + ")}
-                          {alternativas[0].includes("SUM") ? " (soma)" : ""}
+                          {formatarFormula(alternativas[0])}
                         </Typography>
                       )}
                     </Grid>
-                    <Grid item xs={3} md={2}>
+
+                    <Grid item xs={6} md={2}>
                       {campo(
                         "Ajuste",
                         ajustes[id] ?? 0,
                         (v) =>
-                          atualizar("ajustesPericiasCyberpunk", {
-                            ...ajustes,
-                            [id]: Number(v),
-                          }),
+                          atualizar("ajustesPericiasCyberpunk", (anterior) => ({
+                            ...(anterior || {}),
+                            [id]: Number(v) || 0,
+                          })),
                         { type: "number" },
                       )}
                     </Grid>
-                    <Grid item xs={3} md={3}>
+
+                    <Grid item xs={6} md={3}>
                       <Typography fontWeight={700} textAlign="center">
                         Total: {valor}
                       </Typography>
@@ -454,11 +673,14 @@ export default function CyberpunkSheet({
                   </Grid>
                 );
               })}
-              <Divider sx={{ mt: 2 }} />
+
+              <Divider sx={{ mt: 2, borderColor: CORES.borda }} />
             </Box>
           ))}
         </>,
       )}
+
+      {/* HABILIDADES */}
 
       {secao(
         "Habilidades",
@@ -467,7 +689,12 @@ export default function CyberpunkSheet({
             <Paper
               key={habilidade.id || index}
               variant="outlined"
-              sx={{ p: 2, mb: 2 }}
+              sx={{
+                p: 2,
+                mb: 2,
+                bgcolor: "#100E16",
+                borderColor: CORES.borda,
+              }}
             >
               <Grid container spacing={2}>
                 <Grid item xs={12} md={6}>
@@ -475,20 +702,25 @@ export default function CyberpunkSheet({
                     editarHabilidade(index, "nome", v),
                   )}
                 </Grid>
+
                 <Grid item xs={12} md={2}>
                   {campo(
                     "Nível",
-                    habilidade.nivel,
-                    (v) => editarHabilidade(index, "nivel", Number(v)),
+                    habilidade.nivel ?? 1,
+                    (v) => editarHabilidade(index, "nivel", Number(v) || 0),
                     { type: "number" },
                   )}
                 </Grid>
+
                 <Grid item xs={12}>
                   {campo(
                     "Efeito / descrição",
                     habilidade.efeito,
                     (v) => editarHabilidade(index, "efeito", v),
-                    { multiline: true, minRows: 2 },
+                    {
+                      multiline: true,
+                      minRows: 2,
+                    },
                   )}
                 </Grid>
               </Grid>
@@ -511,23 +743,28 @@ export default function CyberpunkSheet({
                       fullWidth
                       size="small"
                       label="Tipo"
-                      value={bonus.tipo}
+                      value={bonus.tipo || "pericia"}
+                      disabled={!podeEditar || salvando}
                       onChange={(e) =>
                         editarBonus(index, bonusIndex, "tipo", e.target.value)
                       }
                     >
                       <MenuItem value="atributo">Atributo</MenuItem>
+
                       <MenuItem value="pericia">Perícia</MenuItem>
+
                       <MenuItem value="recurso">Recurso</MenuItem>
                     </TextField>
                   </Grid>
+
                   <Grid item xs={12} md={6}>
                     <TextField
                       select
                       fullWidth
                       size="small"
                       label="Onde aplicar"
-                      value={bonus.alvo}
+                      value={bonus.alvo || ""}
+                      disabled={!podeEditar || salvando}
                       onChange={(e) =>
                         editarBonus(index, bonusIndex, "alvo", e.target.value)
                       }
@@ -539,17 +776,21 @@ export default function CyberpunkSheet({
                       ))}
                     </TextField>
                   </Grid>
+
                   <Grid item xs={8} md={2}>
                     {campo(
                       "Valor",
                       bonus.valor,
-                      (v) => editarBonus(index, bonusIndex, "valor", Number(v)),
+                      (v) =>
+                        editarBonus(index, bonusIndex, "valor", Number(v) || 0),
                       { type: "number" },
                     )}
                   </Grid>
+
                   <Grid item xs={4} md={1}>
                     <Button
                       color="error"
+                      disabled={!podeEditar || salvando}
                       onClick={() => removerBonus(index, bonusIndex)}
                     >
                       Excluir
@@ -558,30 +799,37 @@ export default function CyberpunkSheet({
                 </Grid>
               ))}
 
-              <Button size="small" onClick={() => adicionarBonus(index)}>
+              <Button
+                size="small"
+                disabled={!podeEditar || salvando}
+                onClick={() => adicionarBonus(index)}
+              >
                 + Adicionar bônus
               </Button>
+
               <Button
                 size="small"
                 color="error"
                 sx={{ ml: 1 }}
-                onClick={() =>
-                  atualizar(
-                    "habilidadesCyberpunk",
-                    habilidades.filter((_, i) => i !== index),
-                  )
-                }
+                disabled={!podeEditar || salvando}
+                onClick={() => removerHabilidade(index)}
               >
                 Excluir habilidade
               </Button>
             </Paper>
           ))}
 
-          <Button variant="outlined" onClick={adicionarHabilidade}>
+          <Button
+            variant="outlined"
+            disabled={!podeEditar || salvando}
+            onClick={adicionarHabilidade}
+          >
             + Nova habilidade
           </Button>
         </>,
       )}
+
+      {/* CYBERWARE */}
 
       {secao(
         "Cyberware",
@@ -593,6 +841,7 @@ export default function CyberpunkSheet({
                   editarCyberware(index, "nome", v),
                 )}
               </Grid>
+
               <Grid item xs={12} md={6}>
                 {campo(
                   "Efeitos",
@@ -601,15 +850,12 @@ export default function CyberpunkSheet({
                   { multiline: true },
                 )}
               </Grid>
+
               <Grid item xs={12} md={2}>
                 <Button
                   color="error"
-                  onClick={() =>
-                    atualizar(
-                      "cyberwareCyberpunk",
-                      cyberwares.filter((_, i) => i !== index),
-                    )
-                  }
+                  disabled={!podeEditar || salvando}
+                  onClick={() => removerCyberware(index)}
                 >
                   Excluir
                 </Button>
@@ -617,7 +863,11 @@ export default function CyberpunkSheet({
             </Grid>
           ))}
 
-          <Button variant="outlined" onClick={adicionarCyberware}>
+          <Button
+            variant="outlined"
+            disabled={!podeEditar || salvando}
+            onClick={adicionarCyberware}
+          >
             + Adicionar cyberware
           </Button>
         </>,

@@ -1,5 +1,3 @@
-// src/data/cyberpunk.js
-
 export const ATRIBUTOS_CYBERPUNK = [
   { id: "STR", nome: "Força" },
   { id: "DEX", nome: "Destreza" },
@@ -23,8 +21,12 @@ export const REGIOES_PV_CYBERPUNK = [
   { id: "pernaEsquerda", nome: "Perna esquerda", multiplicador: 0.4 },
 ];
 
-// Cada fórmula pode ter uma ou mais alternativas.
-// "media" calcula a média; "soma" soma os atributos.
+// Fórmulas:
+// - Um atributo: utiliza seu valor total.
+// - Dois atributos: calcula a média.
+// - Fórmula com SUM: soma os atributos sem dividir.
+// - Cada fórmula pode possuir alternativas.
+
 export const PERICIAS_CYBERPUNK = [
   {
     categoria: "Físicas",
@@ -39,6 +41,7 @@ export const PERICIAS_CYBERPUNK = [
       ["natacao", "Natação", [["STR", "CON"]]],
     ],
   },
+
   {
     categoria: "Percepção",
     pericias: [
@@ -53,6 +56,7 @@ export const PERICIAS_CYBERPUNK = [
       ["percepcaoTempo", "Percepção do tempo", [["WIS", "INT"]]],
     ],
   },
+
   {
     categoria: "Sociais",
     pericias: [
@@ -106,6 +110,7 @@ export const PERICIAS_CYBERPUNK = [
       ["seducao", "Sedução", [["CHA", "INT"]]],
     ],
   },
+
   {
     categoria: "Conhecimento",
     pericias: [
@@ -129,12 +134,18 @@ export const PERICIAS_CYBERPUNK = [
         "Astronomia",
         "Geografia",
       ].map((nome) => [
-        nome.toLowerCase().replaceAll(" ", "_"),
+        nome
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_|_$/g, ""),
         nome,
         [["INT"]],
       ]),
     ],
   },
+
   {
     categoria: "Conhecimentos Gerais",
     pericias: [
@@ -143,12 +154,13 @@ export const PERICIAS_CYBERPUNK = [
       ["rastrear", "Rastrear", [["INT", "PER", "SUM"]]],
       ["primeirosSocorros", "Primeiros socorros", [["INT", "WIS", "SUM"]]],
       ["navegacao", "Navegação", [["INT", "PER"]]],
-      ["equitação", "Equitação", [["DEX", "INT"]]],
+      ["equitacao", "Equitação", [["DEX", "INT"]]],
       ["veiculoTerrestre", "Conduzir veículo terrestre", [["DEX", "INT"]]],
       ["veiculoAquatico", "Conduzir veículo aquático", [["DEX", "INT"]]],
       ["veiculoAereo", "Conduzir veículo aéreo", [["DEX", "INT"]]],
     ],
   },
+
   {
     categoria: "Resistências Mentais",
     pericias: [
@@ -161,6 +173,7 @@ export const PERICIAS_CYBERPUNK = [
       ["resistirMedo", "Resistir ao medo", [["WIL", "WIS"]]],
     ],
   },
+
   {
     categoria: "Resistências Físicas",
     pericias: [
@@ -193,6 +206,7 @@ export function criarDadosIniciaisCyberpunk() {
   });
 
   const pvRegioesCyberpunkAtuais = {};
+
   REGIOES_PV_CYBERPUNK.forEach(({ id }) => {
     pvRegioesCyberpunkAtuais[id] = 0;
   });
@@ -205,12 +219,25 @@ export function criarDadosIniciaisCyberpunk() {
       peso: "",
       cultura: "",
     },
+
     atributosCyberpunk,
+
+    // Mantido para compatibilidade com fichas antigas.
+    // O valor exibido será sempre calculado pela Constituição.
     pvMaximoCyberpunk: 0,
     pvAtualCyberpunk: 0,
     pvRegioesCyberpunkAtuais,
-    stressCyberpunk: { atual: 0, maximo: 100 },
-    sanidadeCyberpunk: { atual: 100, maximo: 100 },
+
+    stressCyberpunk: {
+      atual: 0,
+      maximo: 100,
+    },
+
+    sanidadeCyberpunk: {
+      atual: 100,
+      maximo: 100,
+    },
+
     ajustesPericiasCyberpunk: {},
     formulasCyberpunk: {},
     habilidadesCyberpunk: [],
@@ -221,17 +248,18 @@ export function criarDadosIniciaisCyberpunk() {
 export function calcularBonusCyberpunk(dados, tipo, alvo) {
   return (dados.habilidadesCyberpunk || []).reduce((total, habilidade) => {
     const bonus = habilidade.bonus || [];
-    return (
-      total +
-      bonus
-        .filter((item) => item.tipo === tipo && item.alvo === alvo)
-        .reduce((soma, item) => soma + (Number(item.valor) || 0), 0)
-    );
+
+    const soma = bonus
+      .filter((item) => item.tipo === tipo && item.alvo === alvo)
+      .reduce((subtotal, item) => subtotal + (Number(item.valor) || 0), 0);
+
+    return total + soma;
   }, 0);
 }
 
 export function calcularAtributoCyberpunk(dados, atributoId) {
   const atributo = dados.atributosCyberpunk?.[atributoId] || {};
+
   const valor = Number(atributo.valor) || 0;
   const modificador = Number(atributo.modificador) || 0;
   const multiplicador = Number(atributo.multiplicador ?? 1);
@@ -242,36 +270,81 @@ export function calcularAtributoCyberpunk(dados, atributoId) {
   );
 }
 
-export function calcularPericiaCyberpunk(dados, periciaId) {
-  const definicao = LISTA_PERICIAS_CYBERPUNK.find((p) => p.id === periciaId);
-  if (!definicao) return 0;
+// PV máximo = valor total de Constituição.
+// Não considera tamanho do personagem.
+export function calcularPVMaximoCyberpunk(dados) {
+  return Math.max(0, calcularAtributoCyberpunk(dados, "CON"));
+}
 
-  const grupo = PERICIAS_CYBERPUNK.find((g) =>
-    g.pericias.some(([id]) => id === periciaId),
+// Calcula o PV máximo de uma região.
+export function calcularPVRegiaoCyberpunk(dados, regiaoId) {
+  const regiao = REGIOES_PV_CYBERPUNK.find((item) => item.id === regiaoId);
+
+  if (!regiao) return 0;
+
+  return calcularPVMaximoCyberpunk(dados) * regiao.multiplicador;
+}
+
+export function calcularPericiaCyberpunk(dados, periciaId) {
+  const grupo = PERICIAS_CYBERPUNK.find((item) =>
+    item.pericias.some(([id]) => id === periciaId),
   );
+
+  if (!grupo) return 0;
+
   const item = grupo.pericias.find(([id]) => id === periciaId);
+
+  if (!item) return 0;
+
   const formulas = item[2];
 
-  const indice = Number(dados.formulasCyberpunk?.[periciaId] || 0);
-  const formula = formulas[Math.min(indice, formulas.length - 1)];
+  if (!formulas?.length) return 0;
+
+  // Compatibilidade com fichas antigas que usavam "equitação".
+  const chaveAntiga = periciaId === "equitacao" ? "equitação" : periciaId;
+
+  const indiceSalvo = Number(
+    dados.formulasCyberpunk?.[periciaId] ??
+      dados.formulasCyberpunk?.[chaveAntiga] ??
+      0,
+  );
+
+  const indice = Math.max(
+    0,
+    Math.min(
+      Number.isFinite(indiceSalvo) ? indiceSalvo : 0,
+      formulas.length - 1,
+    ),
+  );
+
+  const formula = formulas[indice];
 
   const soma = formula.includes("SUM");
+
   const atributos = formula.filter((id) => id !== "SUM");
+
   const valores = atributos.map((id) => calcularAtributoCyberpunk(dados, id));
 
-  const base = soma
-    ? valores.reduce((a, b) => a + b, 0)
-    : valores.reduce((a, b) => a + b, 0) / valores.length;
+  const total = valores.reduce((subtotal, valor) => subtotal + valor, 0);
 
-  const ajuste = Number(dados.ajustesPericiasCyberpunk?.[periciaId]) || 0;
+  const base = soma || valores.length <= 1 ? total : total / valores.length;
+
+  const ajuste =
+    Number(
+      dados.ajustesPericiasCyberpunk?.[periciaId] ??
+        dados.ajustesPericiasCyberpunk?.[chaveAntiga],
+    ) || 0;
+
   const bonus = calcularBonusCyberpunk(dados, "pericia", periciaId);
 
   return Math.round(base) + ajuste + bonus;
 }
 
+// PE = média entre Constituição e Resistência + bônus de habilidades.
 export function calcularPECyberpunk(dados) {
   const con = calcularAtributoCyberpunk(dados, "CON");
   const res = calcularAtributoCyberpunk(dados, "RES");
+
   return (
     Math.round((con + res) / 2) + calcularBonusCyberpunk(dados, "recurso", "PE")
   );
