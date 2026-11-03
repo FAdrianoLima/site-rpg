@@ -550,23 +550,34 @@ export default function CyberpunkSheet({
         "Pontos de vida por região",
         <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Os valores máximos são calculados automaticamente com base no PV
-            total e no multiplicador de cada região.
+            Os PV máximos de cada região são calculados automaticamente com base
+            na Constituição e no multiplicador correspondente.
+          </Typography>
+
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            PV total utilizado no cálculo: <strong>{pvMaximo}</strong>
           </Typography>
 
           <Grid container spacing={2}>
             {REGIOES_PV_CYBERPUNK.map((regiao) => {
-              const maximo = calcularPVRegiaoCyberpunk(dados, regiao.id);
-
+              const multiplicador = Number(regiao.multiplicador);
+              const maximo = Number(pvMaximo) * multiplicador;
               const atual = Number(pvRegioes[regiao.id] ?? 0);
 
               return (
                 <Grid item xs={6} md={3} key={regiao.id}>
-                  <Typography fontWeight={600}>{regiao.nome}</Typography>
-
-                  <Typography variant="caption" color="text.secondary">
-                    Máximo: {maximo.toFixed(1)} ({regiao.multiplicador}x PV)
+                  <Typography fontWeight={600} sx={{ mb: 1 }}>
+                    {regiao.nome}
                   </Typography>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="PV máximo"
+                    value={Number.isFinite(maximo) ? maximo.toFixed(1) : "Erro"}
+                    InputProps={{ readOnly: true }}
+                    sx={{ mb: 1 }}
+                  />
 
                   {campo(
                     "PV atual",

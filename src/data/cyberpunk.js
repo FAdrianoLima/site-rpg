@@ -282,7 +282,11 @@ export function calcularPVRegiaoCyberpunk(dados, regiaoId) {
 
   if (!regiao) return 0;
 
-  return calcularPVMaximoCyberpunk(dados) * regiao.multiplicador;
+  // Utiliza o PV máximo já calculado pela ficha
+  const pvMaximo = calcularPVMaximoCyberpunk(dados);
+
+  // Aplica o multiplicador específico da região
+  return Math.max(0, pvMaximo * regiao.multiplicador);
 }
 
 export function calcularPericiaCyberpunk(dados, periciaId) {
